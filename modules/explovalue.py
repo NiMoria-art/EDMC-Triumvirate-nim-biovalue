@@ -13,6 +13,7 @@
 import tkinter as tk
 from tkinter import ttk
 from threading import RLock
+from queue import Empty, Queue
 
 from modules.debug import debug
 from modules.lib.journal import JournalEntry
@@ -156,6 +157,9 @@ class ExploValue(tk.Frame, Module):
         self._rebuilding = True
         self._history_error = False
         self._buffer = []
+        self._ui_queue = Queue()
+        self._ui_poll_id = None
+        self._closed = False
         self.current_star_type = None
         self.current_system_address = None
 
@@ -197,6 +201,9 @@ class ExploValue(tk.Frame, Module):
 
     # ---------- хуки Module ----------
     def on_start(self, plugin_dir):
+        # Tk calls must be scheduled by its main thread. The history reader only
+        # puts results into the queue; this timer drains it on the UI thread.
+        self._ui_poll_id = self.after(100, self._drain_ui_queue)
         BasicThread(name="ExploValueHistory", target=self._read_history).start()
 
     def on_journal_entry(self, entry: JournalEntry):
@@ -209,7 +216,7 @@ class ExploValue(tk.Frame, Module):
                 return
             changed = self._apply(ev)
         if changed:
-            self.after(0, self._refresh)
+            self._ui_queue.put(("refresh", None))
 
     # ---------- история ----------
     def _read_history(self):
@@ -226,7 +233,34 @@ class ExploValue(tk.Frame, Module):
             self._history_error = True
             debug("ExploValue: ошибка чтения истории журналов")
             events = []
-        self.after(0, self._finish_history, events)
+        self._ui_queue.put(("history", events))
+
+    def _drain_ui_queue(self):
+        self._ui_poll_id = None
+        if self._closed:
+            return
+        refresh = False
+        while True:
+            try:
+                action, payload = self._ui_queue.get_nowait()
+            except Empty:
+                break
+            if action == "history":
+                self._finish_history(payload)
+            elif action == "refresh":
+                refresh = True
+        if refresh:
+            self._refresh()
+        self._ui_poll_id = self.after(100, self._drain_ui_queue)
+
+    def close(self):
+        self._closed = True
+        if self._ui_poll_id is not None:
+            try:
+                self.after_cancel(self._ui_poll_id)
+            except tk.TclError:
+                pass
+            self._ui_poll_id = None
 
     def _finish_history(self, events):
         with self._lock:

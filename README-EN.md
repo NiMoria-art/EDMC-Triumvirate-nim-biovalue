@@ -71,6 +71,12 @@ Collects and processes information about a specific pilot's carrier ship. Provid
 
 Functions for changing the design style of the plugin window to match the style of a particular faction.
 
+## Exploration panels
+
+The plugin includes panels that estimate exobiology sample and exploration cartography values. They rebuild their state from Elite Dangerous journal files; unsold values are estimates, while completed sales use the amounts reported by the journal.
+
+The cartography panel warns when a white dwarf is detected. Plugin errors are written to `logs/errors.log`, with rotation and up to three previous files retained.
+
 ## Installation Instructions:
 
 1) Download and install the latest version of [EDMarketConnector](https://github.com/Marginal/EDMarketConnector/blob/rel-342/README.md#installation) (if it is already installed, be sure to check EDMC for updates)

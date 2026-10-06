@@ -2,6 +2,7 @@
 import csv
 import os
 import logging
+from logging.handlers import RotatingFileHandler
 import webbrowser
 import traceback
 import tkinter as tk
@@ -24,6 +25,7 @@ from config import config as edmc_config
 
 ### модули плагина ###
 from modules import canonn_api, codex
+from modules import biovalue, explovalue
 from modules import friendfoe as FF
 from modules import (
     legacy,
@@ -177,11 +179,32 @@ def Alegiance_get(CMDR, SQ_old):
         return SQ_old
 
 
+def setup_error_logging(plugin_dir):
+    """Write plugin errors and tracebacks to a small rotating log."""
+    try:
+        log_dir = os.path.join(plugin_dir, "logs")
+        os.makedirs(log_dir, exist_ok=True)
+        handler = RotatingFileHandler(
+            os.path.join(log_dir, "errors.log"),
+            maxBytes=1_000_000,
+            backupCount=3,
+            encoding="utf-8",
+        )
+        handler.setLevel(logging.ERROR)
+        handler.setFormatter(logging.Formatter(
+            "%(asctime)s %(levelname)s %(module)s:%(lineno)d %(funcName)s: %(message)s"
+        ))
+        logger.addHandler(handler)
+    except OSError:
+        logger.error("Не удалось настроить файл журнала ошибок плагина", exc_info=True)
+
+
 def plugin_start3(plugin_dir):
     """
     EDMC вызывает эту функцию при первом запуске плагина (Python 3).
     """
     this.plugin_dir = plugin_dir
+    setup_error_logging(plugin_dir)
     Debug.setup(logger)
     this.journal_entry_processor = JournalEntryProcessor()
     this.journal_entry_processor.start()
@@ -242,13 +265,17 @@ def plugin_app(parent):
     this.bgs_module = bgs.BGS()
     this.colonisation_tracker = DeliveryTracker()
     this.biopatrol = biopatrol.BioPatrol(frame, 3)
+    this.biovalue = biovalue.BioValue(frame, 4)
+    this.explovalue = explovalue.ExploValue(frame, 5)
     this.modules = [
         rel,
         this.patrol,
         this.bgs_module,
         this.canonn_rt_api,
         this.colonisation_tracker,
-        this.biopatrol
+        this.biopatrol,
+        this.biovalue,
+        this.explovalue
     ]
 
     # лейбл, в котором содержится текст из вывода модулей

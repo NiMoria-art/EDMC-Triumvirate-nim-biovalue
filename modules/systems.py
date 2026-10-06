@@ -27,7 +27,9 @@ class SystemsModule(WebClient, Module):
 
     def fetch_system(self, system):
         try:
-            resp = self.request("GET", "/api/v1/lookup", {"name": system})
+            resp = self.request(
+                "GET", "/api/v1/lookup", {"name": system}, timeout=(3, 5)
+            )
         except Exception as e:
             debug(f"fetch_systems failed: {e}")
         else:

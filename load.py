@@ -339,8 +339,11 @@ class JournalEntryProcessor(thread.Thread):
         # not read for that yet
         startup_stats(cmdr)
 
-        if entry.get("event") == "FSDJump":
-            this.systems_module.add_system(entry)
+        if entry.get("event") in {"FSDJump", "Location", "StartUp"}:
+            known_system = entry.get("StarSystem") or (state or {}).get("SystemName") or system
+            known_coords = entry.get("StarPos") or (state or {}).get("StarPos")
+            if known_system and known_coords:
+                this.systems_module.cache[known_system] = known_coords
 
         # отключено, потому что API не работает, а логи засоряются
         #if entry["event"] == "Scan" and entry["ScanType"] in {"Detailed", "AutoScan"}:
@@ -473,27 +476,40 @@ def submit_expedition(cmdr, entry: dict):   # не работает
 
 
 def startup_stats(cmdr):
+    """Send optional startup telemetry without blocking journal processing."""
+    if getattr(this, "first_event", False):
+        return
+    # Set the guard before starting the worker so later journal events do not
+    # enqueue duplicate lookups while the first one is still running.
+    this.first_event = True
+    thread.BasicThread(
+        name="Triumvirate startup statistics",
+        target=_send_startup_stats,
+        args=(cmdr,),
+    ).start()
+
+
+def _send_startup_stats(cmdr):
+    if not cmdr:
+        return
     try:
-        this.first_event
-    except:
-        this.first_event = True
+        addr = requests.get("https://api.ipify.org", timeout=(3, 5)).text.strip()
+    except requests.RequestException:
+        logger.info("Skipping startup statistics: IPv4 lookup failed", exc_info=True)
+        return
 
-        addr = requests.get('https://api.ipify.org').text
-        try:
-            addr6 = requests.get('https://api6.ipify.org').text
-        except:
-            addr6 = addr
-        url="https://docs.google.com/forms/d/1h7LG5dEi07ymJCwp9Uqf_1phbRnhk1R3np7uBEllT-Y/formResponse?usp=pp_url"
-        url+="&entry.1181808218="+quote_plus(cmdr)
-        url+="&entry.254549730="+quote_plus(str(this.version))
-        url+="&entry.1622540328="+quote_plus(addr)
-        if addr6 != addr:
-            url+="&entry.488844173="+quote_plus(addr6)
-        else:
-            url+="&entry.488844173="+quote_plus("0")
-        url+="&entry.1210213202="+str(Release.get_auto())
+    try:
+        addr6 = requests.get("https://api6.ipify.org", timeout=(3, 5)).text.strip()
+    except requests.RequestException:
+        addr6 = addr
 
-        legacy.Reporter(url).start()
+    url = "https://docs.google.com/forms/d/1h7LG5dEi07ymJCwp9Uqf_1phbRnhk1R3np7uBEllT-Y/formResponse?usp=pp_url"
+    url += "&entry.1181808218=" + quote_plus(cmdr)
+    url += "&entry.254549730=" + quote_plus(str(this.version))
+    url += "&entry.1622540328=" + quote_plus(addr)
+    url += "&entry.488844173=" + quote_plus(addr6 if addr6 != addr else "0")
+    url += "&entry.1210213202=" + str(Release.get_auto())
+    legacy.Reporter(url).start()
 
 
 def fuel_consumption(entry, old_fuel, old_timestamp, old_fuel_cons):

@@ -67,9 +67,12 @@ def all_events(max_files: Optional[int] = None,
 
 def events_since_boundary(boundary_events: Iterable[str],
                           max_files: int = DEFAULT_MAX_FILES,
-                          directory: Optional[Path] = None) -> List[dict]:
-    """События (в хронологическом порядке) после последнего события из boundary_events.
-    Если границы нет в просмотренных файлах - возвращаются все просмотренные события."""
+                          directory: Optional[Path] = None,
+                          include_boundary: bool = False) -> List[dict]:
+    """Return events after the newest boundary, optionally including that boundary.
+
+    If no boundary is found in the scanned files, return all scanned events.
+    """
     boundary = set(boundary_events)
     d = directory or journal_dir()
     if d is None:
@@ -85,7 +88,7 @@ def events_since_boundary(boundary_events: Iterable[str],
                 idx = i
                 break
         if idx >= 0:
-            segments.append(events[idx + 1:])
+            segments.append(events[idx if include_boundary else idx + 1:])
             break
         segments.append(events)
     result: List[dict] = []

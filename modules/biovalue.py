@@ -121,7 +121,7 @@ class BioValue(tk.Frame, Module):
         for column in range(3):
             metrics.columnconfigure(column, weight=1, uniform="bio_metric")
         pending_tile = ttk.LabelFrame(metrics, text="Не сдано", padding=(7, 5), style="Triumvirate.Card.TLabelframe")
-        sold_tile = ttk.LabelFrame(metrics, text="Продано", padding=(7, 5), style="Triumvirate.Card.TLabelframe")
+        sold_tile = ttk.LabelFrame(metrics, text="Последняя сдача", padding=(7, 5), style="Triumvirate.Card.TLabelframe")
         bonus_tile = ttk.LabelFrame(metrics, text="Возможный бонус ×5", padding=(7, 5), style="Triumvirate.Card.TLabelframe")
         for column, tile in enumerate((pending_tile, sold_tile, bonus_tile)):
             tile.grid(row=0, column=column, sticky="nsew", padx=(0 if column == 0 else 3, 0))
@@ -162,8 +162,11 @@ class BioValue(tk.Frame, Module):
     # ---------- история ----------
     def _read_history(self):
         try:
-            # Replay sales as well as scans so the sold total survives restarts.
-            events = journal_history.all_events(max_files=300)
+            # Restore only the current unsold segment, including its latest sale
+            # event so the panel can show that transaction without lifetime totals.
+            events = journal_history.events_since_boundary(
+                BOUNDARY_EVENTS, include_boundary=True
+            )
         except Exception:
             debug("BioValue: ошибка чтения истории журналов")
             events = []
@@ -223,13 +226,17 @@ class BioValue(tk.Frame, Module):
             return True
         if t == "SellOrganicData":
             sale_key = ev.get("timestamp")
-            self.sold[sale_key] = sum(i.get("Value", 0) + i.get("Bonus", 0)
-                                      for i in ev.get("BioData", []))
+            self.sold = {
+                sale_key: sum(i.get("Value", 0) + i.get("Bonus", 0)
+                              for i in ev.get("BioData", []))
+            }
             self.pending.clear()
             return True
-        if t == "Died" and self.pending:
+        if t == "Died":
+            changed = bool(self.pending or self.sold)
             self.pending.clear()
-            return True
+            self.sold.clear()
+            return changed
         return False
 
     # ---------- расчёт ----------

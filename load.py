@@ -42,6 +42,7 @@ from modules.lib import journal, thread
 from modules.release import Release
 from modules.systems import SystemsModule
 from modules.colonisation import DeliveryTracker
+from modules.safety_monitor import SafetyMonitor
 import settings
 
 plugin_name = os.path.basename(os.path.dirname(__file__))
@@ -267,6 +268,7 @@ def plugin_app(parent):
     this.biopatrol = biopatrol.BioPatrol(frame, 3)
     this.biovalue = biovalue.BioValue(frame, 4)
     this.explovalue = explovalue.ExploValue(frame, 5)
+    this.safety_monitor = SafetyMonitor(frame, 6)
     this.modules = [
         rel,
         this.patrol,
@@ -275,7 +277,8 @@ def plugin_app(parent):
         this.colonisation_tracker,
         this.biopatrol,
         this.biovalue,
-        this.explovalue
+        this.explovalue,
+        this.safety_monitor
     ]
 
     # лейбл, в котором содержится текст из вывода модулей
